@@ -10,7 +10,7 @@ license = "Apache-2.0"
 keywords = ["speckle", "automate", "bim", "aec"]
 
 dependencies = [
-    "specklepy==3.1.0",
+    "specklepy==3.2.4",
     "openpyxl>=3.1.0",
     "gspread>=6.0.0",
     "google-auth>=2.0.0",
