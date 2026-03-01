@@ -1,0 +1,4 @@
+speckle-automate
+openpyxl
+gspread
+google-auth
