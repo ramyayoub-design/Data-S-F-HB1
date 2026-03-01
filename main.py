@@ -211,37 +211,49 @@ def automate_function(
     automate_context: AutomationContext,
     function_inputs: FunctionInputs,
 ) -> None:
-    version_root_object = automate_context.receive_version()
+    try:
+        print("DEBUG: function started", flush=True)
+        
+        version_root_object = automate_context.receive_version()
+        print("DEBUG: version received", flush=True)
 
-    plugin_breps = breps_only(get_collection_elements(version_root_object, "plugins"))
-    core_breps   = breps_only(get_collection_elements(version_root_object, "Core"))
+        plugin_breps = breps_only(get_collection_elements(version_root_object, "plugins"))
+        core_breps   = breps_only(get_collection_elements(version_root_object, "Core"))
+        print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)}", flush=True)
 
-    wb = openpyxl.Workbook()
-    wb.remove(wb.active)
-    build_plugins_sheet(wb.create_sheet("Plugins - Volumes"),     plugin_breps)
-    build_core_sheet(   wb.create_sheet("Core HBx3 - Structure"), core_breps)
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+        build_plugins_sheet(wb.create_sheet("Plugins - Volumes"),     plugin_breps)
+        build_core_sheet(   wb.create_sheet("Core HBx3 - Structure"), core_breps)
 
-    xlsx_path     = "/tmp/speckle_export.xlsx"
-    sheets_status = "Google Sheets skipped."
+        xlsx_path     = "/tmp/speckle_export.xlsx"
+        sheets_status = "Google Sheets skipped."
 
-    if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
-        wb.save(xlsx_path)
-        automate_context.store_file_result(xlsx_path)
+        if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
+            wb.save(xlsx_path)
+            automate_context.store_file_result(xlsx_path)
+            print("DEBUG: excel saved", flush=True)
 
-    if function_inputs.output_format in (OutputFormat.SHEETS_ONLY, OutputFormat.BOTH):
-        try:
-            sync_to_google_sheets(
-                sheet_id=function_inputs.google_sheet_id,
-                service_account_json=function_inputs.google_service_account_json.get_secret_value(),
-                wb=wb,
-            )
-            sheets_status = "Google Sheets synced."
-        except Exception as e:
-            sheets_status = f"Google Sheets sync failed: {e}"
+        if function_inputs.output_format in (OutputFormat.SHEETS_ONLY, OutputFormat.BOTH):
+            try:
+                sync_to_google_sheets(
+                    sheet_id=function_inputs.google_sheet_id,
+                    service_account_json=function_inputs.google_service_account_json.get_secret_value(),
+                    wb=wb,
+                )
+                sheets_status = "Google Sheets synced."
+            except Exception as e:
+                sheets_status = f"Google Sheets sync failed: {e}"
+            print(f"DEBUG: {sheets_status}", flush=True)
 
-    automate_context.mark_run_success(
-        f"Plugins: {len(plugin_breps)} breps | Core: {len(core_breps)} breps | {sheets_status}"
-    )
+        automate_context.mark_run_success(
+            f"Plugins: {len(plugin_breps)} breps | Core: {len(core_breps)} breps | {sheets_status}"
+        )
+
+    except Exception as e:
+        print(f"EXCEPTION: {e}", flush=True)
+        traceback.print_exc()
+        automate_context.mark_run_failed(f"Function crashed: {e}")
 
 
 if __name__ == "__main__":
