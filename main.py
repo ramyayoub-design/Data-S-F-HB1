@@ -246,12 +246,23 @@ def automate_function(
 
         all_elements = list(flatten_base(version_root_object))
         print(f"DEBUG: total objects = {len(all_elements)}", flush=True)
-        for el in all_elements[:5]:
-            print(f"DEBUG: type={getattr(el, 'speckle_type', '?')} name={getattr(el, 'name', '?')} collectionType={getattr(el, 'collectionType', '?')}", flush=True)
 
-        plugin_breps = breps_only(get_collection_elements(version_root_object, "plugins"))
-        core_breps   = breps_only(get_collection_elements(version_root_object, "Core"))
-        print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)}", flush=True)
+        # Print first 10 objects with their parent info
+        for el in all_elements[:10]:
+            print(f"DEBUG: type={getattr(el, 'speckle_type', '?')} id={getattr(el, 'id', '?')[:8]}", flush=True)
+            props = getattr(el, "properties", None)
+            if props:
+                if hasattr(props, 'get_dynamic_member_names'):
+                    keys = list(props.get_dynamic_member_names())
+                elif isinstance(props, dict):
+                    keys = list(props.keys())
+                else:
+                    keys = []
+                print(f"DEBUG: property keys={keys}", flush=True)
+
+        plugin_breps = [e for e in all_elements if "Brep" in getattr(e, "speckle_type", "")]
+        core_breps   = []
+        print(f"DEBUG: all breps={len(plugin_breps)}", flush=True)
 
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
