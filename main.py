@@ -21,7 +21,7 @@ except ImportError as e:
     traceback.print_exc()
     sys.exit(1)
 
-from pydantic import Field, SecretStr
+from pydantic import Field
 from speckle_automate import AutomateBase, AutomationContext, execute_automate_function
 from specklepy.objects.base import Base
 from flatten import flatten_base
@@ -46,8 +46,8 @@ class FunctionInputs(AutomateBase):
         description="The ID from your Sheet URL: .../spreadsheets/d/<ID>/edit",
         min_length=10,
     )
-    google_service_account_json: SecretStr = Field(
-        title="Google Service Account JSON (Secret)",
+    google_service_account_json: str = Field(
+        title="Google Service Account JSON",
         description="Full JSON content of your GCP service account key.",
     )
 
@@ -253,7 +253,7 @@ def automate_function(
             try:
                 sync_to_google_sheets(
                     sheet_id=function_inputs.google_sheet_id,
-                    service_account_json=function_inputs.google_service_account_json.get_secret_value(),
+                    service_account_json=function_inputs.google_service_account_json,
                     wb=wb,
                 )
                 sheets_status = "Google Sheets synced."
