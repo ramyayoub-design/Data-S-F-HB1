@@ -5,19 +5,25 @@ and exports them to Excel + Google Sheets.
 """
 
 import json
+import sys
+import traceback
 from enum import Enum
 from typing import Any, List
 
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-import gspread
-from google.oauth2.service_account import Credentials
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    import gspread
+    from google.oauth2.service_account import Credentials
+except ImportError as e:
+    print(f"IMPORT ERROR: {e}", flush=True)
+    traceback.print_exc()
+    sys.exit(1)
+
 from pydantic import Field, SecretStr
 from speckle_automate import AutomateBase, AutomationContext, execute_automate_function
 from specklepy.objects.base import Base
-
 from flatten import flatten_base
-
 
 # ─── Inputs ───────────────────────────────────────────────────────────────────
 

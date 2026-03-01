@@ -11,11 +11,11 @@ keywords = ["speckle", "automate", "bim", "aec"]
 
 dependencies = [
     "specklepy==3.1.0",
-    "openpyxl",
-    "gspread",
-    "google-auth",
+    "openpyxl>=3.1.0",
+    "gspread>=6.0.0",
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib",
 ]
-
 
 [project.optional-dependencies]
 dev = [
