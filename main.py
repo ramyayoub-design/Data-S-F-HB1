@@ -54,29 +54,6 @@ class FunctionInputs(AutomateBase):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def get_collection_elements(root: Base, collection_name: str) -> List[Base]:
-    elements = []
-    for attr in root.get_dynamic_member_names():
-        child = getattr(root, attr, None)
-        if not isinstance(child, Base):
-            continue
-        display = getattr(child, "name", None) or getattr(child, "collectionType", None) or attr
-        if collection_name.lower() in str(display).lower():
-            for item in flatten_base(child):
-                elements.append(item)
-            return elements
-        for sub_attr in child.get_dynamic_member_names():
-            sub = getattr(child, sub_attr, None)
-            if not isinstance(sub, Base):
-                continue
-            sub_display = getattr(sub, "name", None) or getattr(sub, "collectionType", None) or sub_attr
-            if collection_name.lower() in str(sub_display).lower():
-                for item in flatten_base(sub):
-                    elements.append(item)
-                return elements
-    return elements
-
-
 def get_prop(obj: Base, *key_fragments: str) -> Any:
     props = getattr(obj, "properties", None)
     if not props:
@@ -94,10 +71,6 @@ def get_prop(obj: Base, *key_fragments: str) -> Any:
             if fragment.lower() in k.lower().strip():
                 return v
     return None
-
-
-def breps_only(elements: List[Base]) -> List[Base]:
-    return [e for e in elements if "Brep" in getattr(e, "speckle_type", "")]
 
 
 def style_header_row(ws, row: int, fill_hex: str):
@@ -136,9 +109,9 @@ def build_plugins_sheet(ws, breps: List[Base]):
             getattr(brep, "units", "m"),
             get_prop(brep, "Volume"),
             get_prop(brep, "Normalized"),
-            get_prop(brep, "Program", "density", "prg"),
+            get_prop(brep, "Program", "Height", "density"),
             get_prop(brep, "Wind"),
-            get_prop(brep, "incident", "radiation", "rad"),
+            get_prop(brep, "incident", "radiation"),
         ])
 
     ws.append([])
@@ -244,24 +217,23 @@ def automate_function(
         version_root_object = result_holder[0]
         print("DEBUG: version received", flush=True)
 
-        all_elements = list(flatten_base(version_root_object))
-        print(f"DEBUG: total objects = {len(all_elements)}", flush=True)
+        # Split all breps: plugins have 'Volume' property, core don't
+        all_breps = [e for e in flatten_base(version_root_object) if "Brep" in getattr(e, "speckle_type", "")]
+        print(f"DEBUG: total breps={len(all_breps)}", flush=True)
 
-        # Print root-level attributes to find collection names
-        print("DEBUG: root attrs:", flush=True)
-        for attr in version_root_object.get_dynamic_member_names():
-            child = getattr(version_root_object, attr, None)
-            if isinstance(child, Base):
-                name = getattr(child, "name", None) or getattr(child, "collectionType", None) or attr
-                print(f"  attr={attr} name={name}", flush=True)
-                for sub_attr in child.get_dynamic_member_names():
-                    sub = getattr(child, sub_attr, None)
-                    if isinstance(sub, Base):
-                        sub_name = getattr(sub, "name", None) or getattr(sub, "collectionType", None) or sub_attr
-                        print(f"    sub_attr={sub_attr} name={sub_name}", flush=True)
+        plugin_breps = []
+        core_breps = []
+        for brep in all_breps:
+            props = getattr(brep, "properties", None)
+            if props:
+                keys = list(props.get_dynamic_member_names()) if isinstance(props, Base) else list(props.keys()) if isinstance(props, dict) else []
+                if any("volume" in k.lower() for k in keys):
+                    plugin_breps.append(brep)
+                else:
+                    core_breps.append(brep)
+            else:
+                core_breps.append(brep)
 
-        plugin_breps = breps_only(get_collection_elements(version_root_object, "plugins"))
-        core_breps   = breps_only(get_collection_elements(version_root_object, "Core"))
         print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)}", flush=True)
 
         wb = openpyxl.Workbook()
@@ -301,7 +273,4 @@ def automate_function(
 
 if __name__ == "__main__":
     execute_automate_function(automate_function, FunctionInputs)
-
-
-
-
+    
