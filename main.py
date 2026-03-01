@@ -244,6 +244,11 @@ def automate_function(
         version_root_object = result_holder[0]
         print("DEBUG: version received", flush=True)
 
+        all_elements = list(flatten_base(version_root_object))
+        print(f"DEBUG: total objects = {len(all_elements)}", flush=True)
+        for el in all_elements[:5]:
+            print(f"DEBUG: type={getattr(el, 'speckle_type', '?')} name={getattr(el, 'name', '?')} collectionType={getattr(el, 'collectionType', '?')}", flush=True)
+
         plugin_breps = breps_only(get_collection_elements(version_root_object, "plugins"))
         core_breps   = breps_only(get_collection_elements(version_root_object, "Core"))
         print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)}", flush=True)
