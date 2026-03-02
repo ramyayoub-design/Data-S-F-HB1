@@ -244,10 +244,15 @@ def automate_function(
         xlsx_path     = "/tmp/speckle_export.xlsx"
         sheets_status = "Google Sheets skipped."
 
+        
+
         if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
             wb.save(xlsx_path)
             automate_context.store_file_result(xlsx_path)
             print("DEBUG: excel saved", flush=True)
+
+        json_val = function_inputs.google_service_account_json
+        print(f"DEBUG: json field length={len(json_val)} first50={json_val[:50]!r}", flush=True)
 
         if function_inputs.output_format in (OutputFormat.SHEETS_ONLY, OutputFormat.BOTH):
             try:
