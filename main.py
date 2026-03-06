@@ -53,6 +53,21 @@ class FunctionInputs(AutomateBase):
         title="Google Service Account JSON",
         description="Full JSON content of your GCP service account key.",
     )
+    sender_email: str = Field(
+        default="",
+        title="Sender Email",
+        description="Gmail address used to send the notification (e.g. yourname@gmail.com).",
+    )
+    sender_app_password: str = Field(
+        default="",
+        title="Sender App Password",
+        description="Gmail App Password for the sender account (not your regular password). Generate one at myaccount.google.com/apppasswords.",
+    )
+    team_emails: str = Field(
+        default="",
+        title="Team Emails",
+        description="Comma-separated list of recipient email addresses (e.g. alice@example.com,bob@example.com).",
+    )
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -244,6 +259,52 @@ def build_pollution_sheet(ws, breps: List[Base]):
     autofit_columns(ws)
 
 
+# ─── Email notification ───────────────────────────────────────────────────────
+
+def send_email_notification(
+    sender_email: str,
+    sender_app_password: str,
+    team_emails: str,
+    sheet_url: str,
+    speckle_url: str,
+) -> str:
+    recipients = [e.strip() for e in team_emails.split(",") if e.strip()]
+    if not recipients:
+        return "Email skipped: no recipient addresses provided."
+    if not sender_email or not sender_app_password:
+        return "Email skipped: sender email or app password not provided."
+
+    subject = "Speckle Automate run complete — Data S-F HB1"
+    body = f"""\
+Hi team,
+
+The latest Speckle Automate run for project Data S-F HB1 has finished successfully.
+
+Please find the results here:
+
+  Google Sheet:
+  {sheet_url}
+
+  Speckle Model:
+  {speckle_url}
+
+This message was sent automatically by Speckle Automate.
+"""
+
+    msg = MIMEMultipart()
+    msg["From"]    = sender_email
+    msg["To"]      = ", ".join(recipients)
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls()
+        server.login(sender_email, sender_app_password)
+        server.sendmail(sender_email, recipients, msg.as_string())
+
+    return f"Email sent to: {', '.join(recipients)}"
+
+
 # ─── Google Sheets sync ───────────────────────────────────────────────────────
 
 def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl.Workbook):
@@ -372,8 +433,30 @@ def automate_function(
                 sheets_status = f"Google Sheets sync failed: {e}"
             print(f"DEBUG: {sheets_status}", flush=True)
 
+        # Build URLs for the notification email
+        run_data     = automate_context.automation_run_data
+        server_url   = run_data.speckle_server_url.rstrip("/")
+        project_id   = run_data.project_id
+        model_id     = run_data.model_id
+        version_id   = run_data.version_id
+        speckle_url  = f"{server_url}/projects/{project_id}/models/{model_id}@{version_id}"
+        sheet_url    = f"https://docs.google.com/spreadsheets/d/{function_inputs.google_sheet_id}/edit"
+
+        email_status = "Email skipped."
+        try:
+            email_status = send_email_notification(
+                sender_email=function_inputs.sender_email,
+                sender_app_password=function_inputs.sender_app_password,
+                team_emails=function_inputs.team_emails,
+                sheet_url=sheet_url,
+                speckle_url=speckle_url,
+            )
+        except Exception as e:
+            email_status = f"Email failed: {e}"
+        print(f"DEBUG: {email_status}", flush=True)
+
         automate_context.mark_run_success(
-            f"Plugins: {len(plugin_breps)} | Core: {len(core_breps)} | Filtration: {len(filtration_breps)} | Pollution: {len(pollution_breps)} | {sheets_status}"
+            f"Plugins: {len(plugin_breps)} | Core: {len(core_breps)} | Filtration: {len(filtration_breps)} | Pollution: {len(pollution_breps)} | {sheets_status} | {email_status}"
         )
 
     except Exception as e:
