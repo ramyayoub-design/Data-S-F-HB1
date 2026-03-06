@@ -1,6 +1,6 @@
 """
 Speckle Automate Function
-Extracts BrepX properties from 'plugins', 'Core HBx3', 'filtration', and 'pollution' collections
+Extracts BrepX properties from 'plugins', 'Core HB1-blockA', 'filtration', and 'pollution' collections
 and exports them to Excel + Google Sheets.
 """
 
@@ -8,12 +8,15 @@ import json
 import sys
 import traceback
 import threading
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from enum import Enum
 from typing import Any, List
 
 try:
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     import gspread
     from google.oauth2.service_account import Credentials
 except ImportError as e:
@@ -77,8 +80,23 @@ def style_header_row(ws, row: int, fill_hex: str):
     fill = PatternFill("solid", fgColor=fill_hex)
     for cell in ws[row]:
         cell.fill = fill
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.alignment = Alignment(horizontal="center")
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def style_data_row(ws, row: int, color_a: str, color_b: str, is_even: bool):
+    fill = PatternFill("solid", fgColor=color_b if is_even else color_a)
+    for cell in ws[row]:
+        cell.fill = fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def style_total_row(ws, row: int, fill_hex: str):
+    fill = PatternFill("solid", fgColor=fill_hex)
+    for cell in ws[row]:
+        cell.fill = fill
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
 def autofit_columns(ws):
@@ -90,14 +108,20 @@ def autofit_columns(ws):
 # ─── Sheet builders ───────────────────────────────────────────────────────────
 
 def build_plugins_sheet(ws, breps: List[Base]):
+    # Colors: deep orange header, alternating light/mid orange rows
+    HEADER_COLOR = "BF4B04"
+    ROW_COLOR_A  = "FFD8B0"   # light orange
+    ROW_COLOR_B  = "FFC080"   # mid orange
+    TOTAL_COLOR  = "BF4B04"
+
     headers = [
         "Index", "Speckle ID", "Application ID",
-        "Geometry Area (m²)", "Geometry Volume (m³)", "Units",
-        "Volume (brep #)", "Normalized Score", "Program & Density",
-        "Wind Pressure (kPa)", "Incident Radiation (kWh/m²)",
+        "Geometry Area (m²)", "Geometry Volume (m³)",
+        "Volume (brep #)", "Normalized Score",
+        "STR_PAR_Density", "ENV_PAR_WindPressure", "ENV_PAR_IncidentRadiation",
     ]
     ws.append(headers)
-    style_header_row(ws, 1, "2F5496")
+    style_header_row(ws, 1, HEADER_COLOR)
 
     for i, brep in enumerate(breps, start=1):
         ws.append([
@@ -106,28 +130,34 @@ def build_plugins_sheet(ws, breps: List[Base]):
             getattr(brep, "applicationId", None),
             round(getattr(brep, "area",   0) or 0, 4),
             round(getattr(brep, "volume", 0) or 0, 4),
-            getattr(brep, "units", "m"),
             get_prop(brep, "Volume"),
             get_prop(brep, "Normalized"),
             get_prop(brep, "STR_PAR_Density"),
             get_prop(brep, "ENV_PAR_WindPressure"),
             get_prop(brep, "ENV_PAR_IncidentRadiation"),
         ])
+        style_data_row(ws, i + 1, ROW_COLOR_A, ROW_COLOR_B, i % 2 == 0)
 
     ws.append([])
+    total_row = ws.max_row + 1
     ws.append(["TOTAL BREPS", len(breps)])
-    ws[ws.max_row][0].font = Font(bold=True)
+    style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
 
 
 def build_core_sheet(ws, breps: List[Base]):
+    # Colors: deep green header, alternating light/mid green rows
+    HEADER_COLOR = "1E5631"
+    ROW_COLOR_A  = "C8E6C9"
+    ROW_COLOR_B  = "A5D6A7"
+    TOTAL_COLOR  = "1E5631"
+
     headers = [
         "Index", "Speckle ID", "Application ID",
-        "Area (m²)", "Units",
-        "Stress Pts Coordinates", "Beam Thickness (m)", "Stress Load",
+        "Stress Pts Coordinates", "Beam Thickness (m)", "STR_PAR_StressLoad",
     ]
     ws.append(headers)
-    style_header_row(ws, 1, "375623")
+    style_header_row(ws, 1, HEADER_COLOR)
 
     total_length = 0.0
     for i, brep in enumerate(breps, start=1):
@@ -143,67 +173,74 @@ def build_core_sheet(ws, breps: List[Base]):
             i,
             getattr(brep, "id", None),
             getattr(brep, "applicationId", None),
-            round(getattr(brep, "area", 0) or 0, 4),
-            getattr(brep, "units", "m"),
             str(stress) if stress is not None else None,
             beam,
             get_prop(brep, "STR_PAR_StressLoad"),
         ])
+        style_data_row(ws, i + 1, ROW_COLOR_A, ROW_COLOR_B, i % 2 == 0)
 
     ws.append([])
     ws.append(["TOTAL BREPS", len(breps)])
-    ws[ws.max_row][0].font = Font(bold=True)
+    style_total_row(ws, ws.max_row, TOTAL_COLOR)
     if total_length > 0:
         ws.append(["TOTAL LENGTH (m)", round(total_length, 4)])
-        ws[ws.max_row][0].font = Font(bold=True)
+        style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
 
 
 def build_filtration_sheet(ws, breps: List[Base]):
+    HEADER_COLOR = "4A148C"
+    ROW_COLOR_A  = "E1BEE7"
+    ROW_COLOR_B  = "CE93D8"
+    TOTAL_COLOR  = "4A148C"
+
     headers = [
         "Index", "Speckle ID", "Application ID",
-        "Area (m²)", "Units", "Filtration Efficiency",
+        "STR_PAR_FiltrationEfficiency",
     ]
     ws.append(headers)
-    style_header_row(ws, 1, "7030A0")
+    style_header_row(ws, 1, HEADER_COLOR)
 
     for i, brep in enumerate(breps, start=1):
         ws.append([
             i,
             getattr(brep, "id", None),
             getattr(brep, "applicationId", None),
-            round(getattr(brep, "area", 0) or 0, 4),
-            getattr(brep, "units", "m"),
             get_prop(brep, "STR_PAR_FiltrationEfficiency"),
         ])
+        style_data_row(ws, i + 1, ROW_COLOR_A, ROW_COLOR_B, i % 2 == 0)
 
     ws.append([])
     ws.append(["TOTAL BREPS", len(breps)])
-    ws[ws.max_row][0].font = Font(bold=True)
+    style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
 
 
 def build_pollution_sheet(ws, breps: List[Base]):
+    HEADER_COLOR = "7B3F00"
+    ROW_COLOR_A  = "FFE0B2"
+    ROW_COLOR_B  = "FFCC80"
+    TOTAL_COLOR  = "7B3F00"
+
     headers = [
         "Index", "Speckle ID", "Application ID",
-        "Area (m²)", "Units", "External Pollution",
+        "ENV_PAR_ExternalPollution",
     ]
     ws.append(headers)
-    style_header_row(ws, 1, "C55A11")
+    style_header_row(ws, 1, HEADER_COLOR)
 
     for i, brep in enumerate(breps, start=1):
         ws.append([
             i,
             getattr(brep, "id", None),
             getattr(brep, "applicationId", None),
-            round(getattr(brep, "area", 0) or 0, 4),
-            getattr(brep, "units", "m"),
             get_prop(brep, "ENV_PAR_ExternalPollution"),
         ])
+        style_data_row(ws, i + 1, ROW_COLOR_A, ROW_COLOR_B, i % 2 == 0)
 
     ws.append([])
     ws.append(["TOTAL BREPS", len(breps)])
-    ws[ws.max_row][0].font = Font(bold=True)
+    style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
 
 
@@ -217,6 +254,16 @@ def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl
     creds = Credentials.from_service_account_info(json.loads(service_account_json), scopes=scopes)
     gc = gspread.authorize(creds)
     spreadsheet = gc.open_by_key(sheet_id)
+
+    # Delete default Sheet1 if it exists
+    for default_name in ["Sheet1", "sheet1", "Feuille 1", "Hoja 1"]:
+        try:
+            default_ws = spreadsheet.worksheet(default_name)
+            # Only delete if it's not the last sheet
+            if len(spreadsheet.worksheets()) > 1:
+                spreadsheet.del_worksheet(default_ws)
+        except gspread.WorksheetNotFound:
+            pass
 
     for sheet_name in wb.sheetnames:
         rows = [[cell.value for cell in row] for row in wb[sheet_name].iter_rows()]
@@ -297,13 +344,13 @@ def automate_function(
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
         build_plugins_sheet(   wb.create_sheet("Plugins - Volumes"),      plugin_breps)
-        build_core_sheet(      wb.create_sheet("Core HBx3 - Structure"),  core_breps)
+        build_core_sheet(      wb.create_sheet("Core HB1-blockA"),        core_breps)
         build_filtration_sheet(wb.create_sheet("Filtration"),             filtration_breps)
         build_pollution_sheet( wb.create_sheet("Pollution"),              pollution_breps)
 
         xlsx_path     = "/tmp/speckle_export.xlsx"
         sheets_status = "Google Sheets skipped."
-    
+
 
         if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
             wb.save(xlsx_path)
