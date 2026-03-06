@@ -32,20 +32,25 @@ from flatten import flatten_base
 
 # ─── Email configuration ──────────────────────────────────────────────────────
 
-SENDER_EMAIL    = "ramy.ayoub@students.iaac.net"      # ← replace with the sending Gmail address
-SENDER_PASSWORD = "ufmb bngr rakd qidd"        # ← replace with the Gmail App Password
+SENDER_EMAIL    = "ramy.ayoub@students.iaac.net"
+SENDER_PASSWORD = "ufmb bngr rakd qidd"
 TEAM_EMAILS     = [
     "maria.sanchez.i.dominguez@students.iaac.net",
     "charles.abi.chahine@students.iaac.net",
     "lakzhmy.mari.zaro@students.iaac.net",
     "emilie.elchidiac@students.iaac.net",
     "hani.karime@students.iaac.net",
-
-
-    # add more teammates below:
-    # "teammate2@students.iaac.net",
-    # "teammate3@students.iaac.net",
 ]
+
+
+# ─── Sheet theme config ───────────────────────────────────────────────────────
+# Each sheet name maps to: (header_hex, row_a_hex, row_b_hex, total_hex)
+SHEET_THEMES = {
+    "Plugins - Volumes":  ("BF4B04", "FFD8B0", "FFC080", "BF4B04"),
+    "Core HB1-blockA":    ("1E5631", "C8E6C9", "A5D6A7", "1E5631"),
+    "Filtration":         ("4A148C", "E1BEE7", "CE93D8", "4A148C"),
+    "Pollution":          ("7B3F00", "FFE0B2", "FFCC80", "7B3F00"),
+}
 
 
 # ─── Inputs ───────────────────────────────────────────────────────────────────
@@ -94,6 +99,15 @@ def get_prop(obj: Base, *key_fragments: str) -> Any:
     return None
 
 
+def hex_to_rgb(hex_color: str) -> dict:
+    h = hex_color.lstrip("#")
+    return {
+        "red":   int(h[0:2], 16) / 255,
+        "green": int(h[2:4], 16) / 255,
+        "blue":  int(h[4:6], 16) / 255,
+    }
+
+
 def style_header_row(ws, row: int, fill_hex: str):
     fill = PatternFill("solid", fgColor=fill_hex)
     for cell in ws[row]:
@@ -126,11 +140,7 @@ def autofit_columns(ws):
 # ─── Sheet builders ───────────────────────────────────────────────────────────
 
 def build_plugins_sheet(ws, breps: List[Base]):
-    # Colors: deep orange header, alternating light/mid orange rows
-    HEADER_COLOR = "BF4B04"
-    ROW_COLOR_A  = "FFD8B0"   # light orange
-    ROW_COLOR_B  = "FFC080"   # mid orange
-    TOTAL_COLOR  = "BF4B04"
+    HEADER_COLOR, ROW_COLOR_A, ROW_COLOR_B, TOTAL_COLOR = SHEET_THEMES["Plugins - Volumes"]
 
     headers = [
         "Index", "Speckle ID", "Application ID",
@@ -157,18 +167,14 @@ def build_plugins_sheet(ws, breps: List[Base]):
         style_data_row(ws, i + 1, ROW_COLOR_A, ROW_COLOR_B, i % 2 == 0)
 
     ws.append([])
-    total_row = ws.max_row + 1
     ws.append(["TOTAL BREPS", len(breps)])
     style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
+    return len(breps)
 
 
 def build_core_sheet(ws, breps: List[Base]):
-    # Colors: deep green header, alternating light/mid green rows
-    HEADER_COLOR = "1E5631"
-    ROW_COLOR_A  = "C8E6C9"
-    ROW_COLOR_B  = "A5D6A7"
-    TOTAL_COLOR  = "1E5631"
+    HEADER_COLOR, ROW_COLOR_A, ROW_COLOR_B, TOTAL_COLOR = SHEET_THEMES["Core HB1-blockA"]
 
     headers = [
         "Index", "Speckle ID", "Application ID",
@@ -204,13 +210,11 @@ def build_core_sheet(ws, breps: List[Base]):
         ws.append(["TOTAL LENGTH (m)", round(total_length, 4)])
         style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
+    return len(breps)
 
 
 def build_filtration_sheet(ws, breps: List[Base]):
-    HEADER_COLOR = "4A148C"
-    ROW_COLOR_A  = "E1BEE7"
-    ROW_COLOR_B  = "CE93D8"
-    TOTAL_COLOR  = "4A148C"
+    HEADER_COLOR, ROW_COLOR_A, ROW_COLOR_B, TOTAL_COLOR = SHEET_THEMES["Filtration"]
 
     headers = [
         "Index", "Speckle ID", "Application ID",
@@ -232,13 +236,11 @@ def build_filtration_sheet(ws, breps: List[Base]):
     ws.append(["TOTAL BREPS", len(breps)])
     style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
+    return len(breps)
 
 
 def build_pollution_sheet(ws, breps: List[Base]):
-    HEADER_COLOR = "7B3F00"
-    ROW_COLOR_A  = "FFE0B2"
-    ROW_COLOR_B  = "FFCC80"
-    TOTAL_COLOR  = "7B3F00"
+    HEADER_COLOR, ROW_COLOR_A, ROW_COLOR_B, TOTAL_COLOR = SHEET_THEMES["Pollution"]
 
     headers = [
         "Index", "Speckle ID", "Application ID",
@@ -260,6 +262,7 @@ def build_pollution_sheet(ws, breps: List[Base]):
     ws.append(["TOTAL BREPS", len(breps)])
     style_total_row(ws, ws.max_row, TOTAL_COLOR)
     autofit_columns(ws)
+    return len(breps)
 
 
 # ─── Email notification ───────────────────────────────────────────────────────
@@ -284,7 +287,6 @@ Please find the results here:
 
 This message was sent automatically by Speckle Automate.
 """
-
     msg = MIMEMultipart()
     msg["From"]    = SENDER_EMAIL
     msg["To"]      = ", ".join(TEAM_EMAILS)
@@ -299,9 +301,88 @@ This message was sent automatically by Speckle Automate.
     return f"Email sent to: {', '.join(TEAM_EMAILS)}"
 
 
+# ─── Google Sheets formatting ─────────────────────────────────────────────────
+
+def format_google_sheet(gs_ws, num_data_rows: int, num_cols: int, sheet_name: str):
+    """Apply header color, alternating row colors, center alignment to a Google Sheet tab."""
+    theme = SHEET_THEMES.get(sheet_name)
+    if not theme:
+        return
+    header_hex, row_a_hex, row_b_hex, total_hex = theme
+
+    sheet_id = gs_ws._properties["sheetId"]
+    requests = []
+
+    def rgb(h):
+        return hex_to_rgb(h)
+
+    # Helper: build a cell format request
+    def fmt_req(start_row, end_row, start_col, end_col, bg_rgb, bold=False, font_color=None):
+        text_fmt = {"bold": bold}
+        if font_color:
+            text_fmt["foregroundColor"] = rgb(font_color)
+        return {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": start_row,
+                    "endRowIndex": end_row,
+                    "startColumnIndex": start_col,
+                    "endColumnIndex": end_col,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": bg_rgb,
+                        "horizontalAlignment": "CENTER",
+                        "verticalAlignment": "MIDDLE",
+                        "textFormat": text_fmt,
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)",
+            }
+        }
+
+    # Row 1: header
+    requests.append(fmt_req(0, 1, 0, num_cols, rgb(header_hex), bold=True, font_color="FFFFFF"))
+
+    # Data rows: alternating colors
+    for i in range(num_data_rows):
+        color = row_b_hex if i % 2 == 1 else row_a_hex
+        requests.append(fmt_req(i + 1, i + 2, 0, num_cols, rgb(color)))
+
+    # Total row(s): after data rows + 1 blank row
+    total_start = num_data_rows + 2  # +1 for header, +1 for blank row
+    requests.append(fmt_req(total_start, total_start + 2, 0, num_cols, rgb(total_hex), bold=True, font_color="FFFFFF"))
+
+    # Freeze header row
+    requests.append({
+        "updateSheetProperties": {
+            "properties": {
+                "sheetId": sheet_id,
+                "gridProperties": {"frozenRowCount": 1},
+            },
+            "fields": "gridProperties.frozenRowCount",
+        }
+    })
+
+    # Auto-resize all columns
+    requests.append({
+        "autoResizeDimensions": {
+            "dimensions": {
+                "sheetId": sheet_id,
+                "dimension": "COLUMNS",
+                "startIndex": 0,
+                "endIndex": num_cols,
+            }
+        }
+    })
+
+    gs_ws.spreadsheet.batch_update({"requests": requests})
+
+
 # ─── Google Sheets sync ───────────────────────────────────────────────────────
 
-def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl.Workbook):
+def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl.Workbook, brep_counts: dict):
     scopes = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -310,11 +391,10 @@ def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl
     gc = gspread.authorize(creds)
     spreadsheet = gc.open_by_key(sheet_id)
 
-    # Delete default Sheet1 if it exists
+    # Delete default Sheet1 if it exists and it's not the only sheet
     for default_name in ["Sheet1", "sheet1", "Feuille 1", "Hoja 1"]:
         try:
             default_ws = spreadsheet.worksheet(default_name)
-            # Only delete if it's not the last sheet
             if len(spreadsheet.worksheets()) > 1:
                 spreadsheet.del_worksheet(default_ws)
         except gspread.WorksheetNotFound:
@@ -322,13 +402,23 @@ def sync_to_google_sheets(sheet_id: str, service_account_json: str, wb: openpyxl
 
     for sheet_name in wb.sheetnames:
         rows = [[cell.value for cell in row] for row in wb[sheet_name].iter_rows()]
+        num_cols = len(rows[0]) if rows else 1
+
         try:
             gs_ws = spreadsheet.worksheet(sheet_name)
             gs_ws.clear()
         except gspread.WorksheetNotFound:
-            gs_ws = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=30)
+            gs_ws = spreadsheet.add_worksheet(title=sheet_name, rows=max(len(rows) + 10, 200), cols=num_cols + 2)
+
         if rows:
             gs_ws.update(rows, value_input_option="USER_ENTERED")
+
+        # Apply formatting
+        try:
+            num_data_rows = brep_counts.get(sheet_name, 0)
+            format_google_sheet(gs_ws, num_data_rows, num_cols, sheet_name)
+        except Exception as e:
+            print(f"DEBUG: formatting failed for {sheet_name}: {e}", flush=True)
 
 
 # ─── Main function ────────────────────────────────────────────────────────────
@@ -403,18 +493,28 @@ def automate_function(
         build_filtration_sheet(wb.create_sheet("Filtration"),             filtration_breps)
         build_pollution_sheet( wb.create_sheet("Pollution"),              pollution_breps)
 
-        xlsx_path     = "/tmp/speckle_export.xlsx"
-        sheets_status = "Google Sheets skipped."
+        # Brep counts per sheet for Google Sheets formatting
+        brep_counts = {
+            "Plugins - Volumes": len(plugin_breps),
+            "Core HB1-blockA":   len(core_breps),
+            "Filtration":        len(filtration_breps),
+            "Pollution":         len(pollution_breps),
+        }
 
+        xlsx_path    = "/tmp/speckle_export.xlsx"
+        excel_status = "Excel skipped."
+        sheets_status = "Google Sheets skipped."
 
         if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
             wb.save(xlsx_path)
             print("DEBUG: excel saved locally", flush=True)
             try:
                 automate_context.store_file_result(xlsx_path)
+                excel_status = "Excel uploaded."
                 print("DEBUG: excel uploaded to Speckle", flush=True)
             except Exception as e:
-                print(f"DEBUG: excel upload failed (file too large): {e}", flush=True)
+                excel_status = f"Excel upload failed: {e}"
+                print(f"DEBUG: {excel_status}", flush=True)
 
         json_val = function_inputs.google_service_account_json
         print(f"DEBUG: json field length={len(json_val)} first50={json_val[:50]!r}", flush=True)
@@ -425,20 +525,15 @@ def automate_function(
                     sheet_id=function_inputs.google_sheet_id,
                     service_account_json=function_inputs.google_service_account_json,
                     wb=wb,
+                    brep_counts=brep_counts,
                 )
                 sheets_status = "Google Sheets synced."
             except Exception as e:
                 sheets_status = f"Google Sheets sync failed: {e}"
             print(f"DEBUG: {sheets_status}", flush=True)
 
-        # Build URLs for the notification email
-        run_data     = automate_context.automation_run_data
-        server_url   = run_data.speckle_server_url.rstrip("/")
-        project_id   = run_data.project_id
-        model_id     = run_data.model_id
-        version_id   = run_data.version_id
-        speckle_url  = f"{server_url}/projects/{project_id}/models/{model_id}@{version_id}"
-        sheet_url    = f"https://docs.google.com/spreadsheets/d/{function_inputs.google_sheet_id}/edit"
+        sheet_url   = f"https://docs.google.com/spreadsheets/d/{function_inputs.google_sheet_id}/edit"
+        speckle_url = "https://speckle.xyz"
 
         email_status = "Email skipped."
         try:
@@ -448,7 +543,7 @@ def automate_function(
         print(f"DEBUG: {email_status}", flush=True)
 
         automate_context.mark_run_success(
-            f"Plugins: {len(plugin_breps)} | Core: {len(core_breps)} | Filtration: {len(filtration_breps)} | Pollution: {len(pollution_breps)} | {sheets_status} | {email_status}"
+            f"Plugins: {len(plugin_breps)} | Core: {len(core_breps)} | Filtration: {len(filtration_breps)} | Pollution: {len(pollution_breps)} | {sheets_status} | {excel_status} | {email_status}"
         )
 
     except Exception as e:
