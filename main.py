@@ -409,8 +409,12 @@ def automate_function(
 
         if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
             wb.save(xlsx_path)
-            automate_context.store_file_result(xlsx_path)
-            print("DEBUG: excel saved", flush=True)
+            print("DEBUG: excel saved locally", flush=True)
+            try:
+                automate_context.store_file_result(xlsx_path)
+                print("DEBUG: excel uploaded to Speckle", flush=True)
+            except Exception as e:
+                print(f"DEBUG: excel upload failed (file too large): {e}", flush=True)
 
         json_val = function_inputs.google_service_account_json
         print(f"DEBUG: json field length={len(json_val)} first50={json_val[:50]!r}", flush=True)
