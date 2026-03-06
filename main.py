@@ -30,6 +30,24 @@ from specklepy.objects.base import Base
 from flatten import flatten_base
 
 
+# ─── Email configuration ──────────────────────────────────────────────────────
+
+SENDER_EMAIL    = "ramy.ayoub@students.iaac.net"      # ← replace with the sending Gmail address
+SENDER_PASSWORD = "ufmb bngr rakd qidd"        # ← replace with the Gmail App Password
+TEAM_EMAILS     = [
+    "maria.sanchez.i.dominguez@students.iaac.net",
+    "charles.abi.chahine@students.iaac.net",
+    "lakzhmy.mari.zaro@students.iaac.net",
+    "emilie.elchidiac@students.iaac.net",
+    "hani.karime@students.iaac.net",
+
+
+    # add more teammates below:
+    # "teammate2@students.iaac.net",
+    # "teammate3@students.iaac.net",
+]
+
+
 # ─── Inputs ───────────────────────────────────────────────────────────────────
 
 class OutputFormat(str, Enum):
@@ -52,21 +70,6 @@ class FunctionInputs(AutomateBase):
     google_service_account_json: str = Field(
         title="Google Service Account JSON",
         description="Full JSON content of your GCP service account key.",
-    )
-    sender_email: str = Field(
-        default="",
-        title="Sender Email",
-        description="Gmail address used to send the notification (e.g. yourname@gmail.com).",
-    )
-    sender_app_password: str = Field(
-        default="",
-        title="Sender App Password",
-        description="Gmail App Password for the sender account (not your regular password). Generate one at myaccount.google.com/apppasswords.",
-    )
-    team_emails: str = Field(
-        default="",
-        title="Team Emails",
-        description="Comma-separated list of recipient email addresses (e.g. alice@example.com,bob@example.com).",
     )
 
 
@@ -261,18 +264,9 @@ def build_pollution_sheet(ws, breps: List[Base]):
 
 # ─── Email notification ───────────────────────────────────────────────────────
 
-def send_email_notification(
-    sender_email: str,
-    sender_app_password: str,
-    team_emails: str,
-    sheet_url: str,
-    speckle_url: str,
-) -> str:
-    recipients = [e.strip() for e in team_emails.split(",") if e.strip()]
-    if not recipients:
-        return "Email skipped: no recipient addresses provided."
-    if not sender_email or not sender_app_password:
-        return "Email skipped: sender email or app password not provided."
+def send_email_notification(sheet_url: str, speckle_url: str) -> str:
+    if not TEAM_EMAILS:
+        return "Email skipped: no recipient addresses in TEAM_EMAILS."
 
     subject = "Speckle Automate run complete — Data S-F HB1"
     body = f"""\
@@ -292,17 +286,17 @@ This message was sent automatically by Speckle Automate.
 """
 
     msg = MIMEMultipart()
-    msg["From"]    = sender_email
-    msg["To"]      = ", ".join(recipients)
+    msg["From"]    = SENDER_EMAIL
+    msg["To"]      = ", ".join(TEAM_EMAILS)
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
 
     with smtplib.SMTP("smtp.gmail.com", 587) as server:
         server.starttls()
-        server.login(sender_email, sender_app_password)
-        server.sendmail(sender_email, recipients, msg.as_string())
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, TEAM_EMAILS, msg.as_string())
 
-    return f"Email sent to: {', '.join(recipients)}"
+    return f"Email sent to: {', '.join(TEAM_EMAILS)}"
 
 
 # ─── Google Sheets sync ───────────────────────────────────────────────────────
@@ -444,13 +438,7 @@ def automate_function(
 
         email_status = "Email skipped."
         try:
-            email_status = send_email_notification(
-                sender_email=function_inputs.sender_email,
-                sender_app_password=function_inputs.sender_app_password,
-                team_emails=function_inputs.team_emails,
-                sheet_url=sheet_url,
-                speckle_url=speckle_url,
-            )
+            email_status = send_email_notification(sheet_url=sheet_url, speckle_url=speckle_url)
         except Exception as e:
             email_status = f"Email failed: {e}"
         print(f"DEBUG: {email_status}", flush=True)
