@@ -1,6 +1,6 @@
 """
 Speckle Automate Function
-Extracts BrepX properties from 'plugins' and 'Core HBx3' collections
+Extracts BrepX properties from 'plugins', 'Core HBx3', 'filtration', and 'pollution' collections
 and exports them to Excel + Google Sheets.
 """
 
@@ -109,9 +109,9 @@ def build_plugins_sheet(ws, breps: List[Base]):
             getattr(brep, "units", "m"),
             get_prop(brep, "Volume"),
             get_prop(brep, "Normalized"),
-            get_prop(brep, "Program", "Height", "density"),
-            get_prop(brep, "Wind"),
-            get_prop(brep, "incident", "radiation"),
+            get_prop(brep, "STR_PAR_Density"),
+            get_prop(brep, "ENV_PAR_WindPressure"),
+            get_prop(brep, "ENV_PAR_IncidentRadiation"),
         ])
 
     ws.append([])
@@ -124,7 +124,7 @@ def build_core_sheet(ws, breps: List[Base]):
     headers = [
         "Index", "Speckle ID", "Application ID",
         "Area (m²)", "Units",
-        "Stress Pts Coordinates", "Beam Thickness (m)",
+        "Stress Pts Coordinates", "Beam Thickness (m)", "Stress Load",
     ]
     ws.append(headers)
     style_header_row(ws, 1, "375623")
@@ -147,6 +147,7 @@ def build_core_sheet(ws, breps: List[Base]):
             getattr(brep, "units", "m"),
             str(stress) if stress is not None else None,
             beam,
+            get_prop(brep, "STR_PAR_StressLoad"),
         ])
 
     ws.append([])
@@ -155,6 +156,54 @@ def build_core_sheet(ws, breps: List[Base]):
     if total_length > 0:
         ws.append(["TOTAL LENGTH (m)", round(total_length, 4)])
         ws[ws.max_row][0].font = Font(bold=True)
+    autofit_columns(ws)
+
+
+def build_filtration_sheet(ws, breps: List[Base]):
+    headers = [
+        "Index", "Speckle ID", "Application ID",
+        "Area (m²)", "Units", "Filtration Efficiency",
+    ]
+    ws.append(headers)
+    style_header_row(ws, 1, "7030A0")
+
+    for i, brep in enumerate(breps, start=1):
+        ws.append([
+            i,
+            getattr(brep, "id", None),
+            getattr(brep, "applicationId", None),
+            round(getattr(brep, "area", 0) or 0, 4),
+            getattr(brep, "units", "m"),
+            get_prop(brep, "STR_PAR_FiltrationEfficiency"),
+        ])
+
+    ws.append([])
+    ws.append(["TOTAL BREPS", len(breps)])
+    ws[ws.max_row][0].font = Font(bold=True)
+    autofit_columns(ws)
+
+
+def build_pollution_sheet(ws, breps: List[Base]):
+    headers = [
+        "Index", "Speckle ID", "Application ID",
+        "Area (m²)", "Units", "External Pollution",
+    ]
+    ws.append(headers)
+    style_header_row(ws, 1, "C55A11")
+
+    for i, brep in enumerate(breps, start=1):
+        ws.append([
+            i,
+            getattr(brep, "id", None),
+            getattr(brep, "applicationId", None),
+            round(getattr(brep, "area", 0) or 0, 4),
+            getattr(brep, "units", "m"),
+            get_prop(brep, "ENV_PAR_ExternalPollution"),
+        ])
+
+    ws.append([])
+    ws.append(["TOTAL BREPS", len(breps)])
+    ws[ws.max_row][0].font = Font(bold=True)
     autofit_columns(ws)
 
 
@@ -217,34 +266,44 @@ def automate_function(
         version_root_object = result_holder[0]
         print("DEBUG: version received", flush=True)
 
-        # Split all breps: plugins have 'Volume' property, core don't
+        # Get all BrepX objects
         all_breps = [e for e in flatten_base(version_root_object) if "Brep" in getattr(e, "speckle_type", "")]
         print(f"DEBUG: total breps={len(all_breps)}", flush=True)
 
-        plugin_breps = []
-        core_breps = []
+        # Split by property keys
+        plugin_breps     = []
+        core_breps       = []
+        filtration_breps = []
+        pollution_breps  = []
+
         for brep in all_breps:
             props = getattr(brep, "properties", None)
             if props:
                 keys = list(props.get_dynamic_member_names()) if isinstance(props, Base) else list(props.keys()) if isinstance(props, dict) else []
-                if any("volume" in k.lower() for k in keys):
+                keys_lower = [k.lower().strip() for k in keys]
+                if any("str_par_filtrationefficiency" in k for k in keys_lower):
+                    filtration_breps.append(brep)
+                elif any("env_par_externalpollution" in k for k in keys_lower):
+                    pollution_breps.append(brep)
+                elif any("volume" in k for k in keys_lower):
                     plugin_breps.append(brep)
                 else:
                     core_breps.append(brep)
             else:
                 core_breps.append(brep)
 
-        print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)}", flush=True)
+        print(f"DEBUG: plugins={len(plugin_breps)} core={len(core_breps)} filtration={len(filtration_breps)} pollution={len(pollution_breps)}", flush=True)
 
         wb = openpyxl.Workbook()
         wb.remove(wb.active)
-        build_plugins_sheet(wb.create_sheet("Plugins - Volumes"),     plugin_breps)
-        build_core_sheet(   wb.create_sheet("Core HBx3 - Structure"), core_breps)
+        build_plugins_sheet(   wb.create_sheet("Plugins - Volumes"),      plugin_breps)
+        build_core_sheet(      wb.create_sheet("Core HBx3 - Structure"),  core_breps)
+        build_filtration_sheet(wb.create_sheet("Filtration"),             filtration_breps)
+        build_pollution_sheet( wb.create_sheet("Pollution"),              pollution_breps)
 
         xlsx_path     = "/tmp/speckle_export.xlsx"
         sheets_status = "Google Sheets skipped."
-
-        
+    
 
         if function_inputs.output_format in (OutputFormat.EXCEL_ONLY, OutputFormat.BOTH):
             wb.save(xlsx_path)
@@ -267,7 +326,7 @@ def automate_function(
             print(f"DEBUG: {sheets_status}", flush=True)
 
         automate_context.mark_run_success(
-            f"Plugins: {len(plugin_breps)} breps | Core: {len(core_breps)} breps | {sheets_status}"
+            f"Plugins: {len(plugin_breps)} | Core: {len(core_breps)} | Filtration: {len(filtration_breps)} | Pollution: {len(pollution_breps)} | {sheets_status}"
         )
 
     except Exception as e:
@@ -278,4 +337,3 @@ def automate_function(
 
 if __name__ == "__main__":
     execute_automate_function(automate_function, FunctionInputs)
-    
